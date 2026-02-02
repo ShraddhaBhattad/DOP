@@ -1,40 +1,30 @@
 /* ============================================================
-   CONFIG
+   CONFIG + HELPERS
 ============================================================ */
 const APP_SPREADSHEET_NAME = 'PostOfficeAppData';
-
-/* ============================================================
-   UTILITIES
-============================================================ */
-const byId = (id) => document.getElementById(id);
-
+const $ = (id) => document.getElementById(id);
 const todayISO = () => new Date().toISOString().split('T')[0];
 
-const buildCustomerMap = (customers) =>
-    new Map(customers.map(c => [c.phoneNumber, c]));
-
 /* ============================================================
-   BASE MODELS
+   BASE MODEL
 ============================================================ */
 class BaseSheetModel {
     static sheetName = '';
     static keyIndex = 0;
 
     static ensureSheet() {
-        if (!sheetsAPI.SPREADSHEET_ID) {
-            throw new Error('Spreadsheet not configured');
-        }
+        if (!sheetsAPI.SPREADSHEET_ID) throw new Error('Spreadsheet not ready');
     }
 
     async saveRow(key, row) {
         BaseSheetModel.ensureSheet();
-        const index = await sheetsAPI.findRow(
+        const idx = await sheetsAPI.findRow(
             this.constructor.sheetName,
             this.constructor.keyIndex,
             key
         );
-        if (index >= 0) {
-            await sheetsAPI.update(this.constructor.sheetName, index, row);
+        if (idx >= 0) {
+            await sheetsAPI.update(this.constructor.sheetName, idx, row);
         } else {
             await sheetsAPI.append(this.constructor.sheetName, row);
         }
@@ -42,14 +32,8 @@ class BaseSheetModel {
 
     static async deleteByKey(key) {
         BaseSheetModel.ensureSheet();
-        const index = await sheetsAPI.findRow(
-            this.sheetName,
-            this.keyIndex,
-            key
-        );
-        if (index >= 0) {
-            await sheetsAPI.delete(this.sheetName, index);
-        }
+        const idx = await sheetsAPI.findRow(this.sheetName, this.keyIndex, key);
+        if (idx >= 0) await sheetsAPI.delete(this.sheetName, idx);
     }
 
     static async readAll() {
@@ -65,7 +49,7 @@ class Customer extends BaseSheetModel {
     static sheetName = 'Customers';
     static keyIndex = 0;
 
-    constructor(d) {
+    constructor(d = {}) {
         super();
         this.phoneNumber = d.phoneNumber || '';
         this.name = d.name || '';
@@ -95,11 +79,6 @@ class Customer extends BaseSheetModel {
             dateOfBirth: r[3]
         }));
     }
-
-    static async findByPhone(phone) {
-        const all = await this.getAll();
-        return all.find(c => c.phoneNumber === phone);
-    }
 }
 
 /* ============================================================
@@ -109,7 +88,7 @@ class PostOfficeAccount extends BaseSheetModel {
     static sheetName = 'PostOfficeAccounts';
     static keyIndex = 0;
 
-    constructor(d) {
+    constructor(d = {}) {
         super();
         Object.assign(this, {
             accountNumber: d.accountNumber || '',
@@ -180,7 +159,7 @@ class LICAccount extends BaseSheetModel {
     static sheetName = 'LICAccounts';
     static keyIndex = 0;
 
-    constructor(d) {
+    constructor(d = {}) {
         super();
         Object.assign(this, {
             policyNumber: d.policyNumber || '',
@@ -248,7 +227,7 @@ class Collection extends BaseSheetModel {
     static sheetName = 'Collections';
     static keyIndex = 0;
 
-    constructor(d) {
+    constructor(d = {}) {
         super();
         Object.assign(this, {
             timestamp: d.timestamp || new Date().toISOString(),
@@ -291,167 +270,181 @@ class Collection extends BaseSheetModel {
     }
 }
 
-const normalizeAccounts = (poAccounts, licAccounts, customers) => {
-    const customerMap = new Map(
-        customers.map(c => [c.phoneNumber, c])
-    );
-
-    return [
-        ...poAccounts.map(a => {
-            const c = customerMap.get(a.customerPhone);
-            return {
-                id: a.accountNumber,
-                type: 'PostOffice',
-                status: a.status,
-                scheme: a.accountType,
-                customerPhone: a.customerPhone,
-                customerName: c?.name || 'Unknown',
-                familyGroup: c?.familyGroup || '',
-                raw: a
-            };
-        }),
-
-        ...licAccounts.map(a => {
-            const c = customerMap.get(a.customerPhone);
-            return {
-                id: a.policyNumber,
-                type: 'LIC',
-                status: a.status,
-                scheme: a.licPlan,
-                customerPhone: a.customerPhone,
-                customerName: c?.name || 'Unknown',
-                familyGroup: c?.familyGroup || '',
-                raw: a
-            };
-        })
-    ];
-};
-
-
 /* ============================================================
-   UI MANAGER (FILTER FIXED)
+   UI MANAGER (FULL CRUD)
 ============================================================ */
 class UIManager {
-    constructor() {
-        this.accountsCustomerPhoneFilter = '';
+    navigateToSection(section) {
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+        $(section)?.classList.add('active');
+
+        if (section === 'dashboard') this.updateDashboard();
+        if (section === 'customers') this.loadCustomers();
+        if (section === 'accounts') this.loadAccounts();
+        if (section === 'maturity-tracker') maturityTracker.filter();
+        if (section === 'collection-tracker') collectionTracker.display();
     }
 
-    async loadAccounts() {
-        const customers = await Customer.getAll();
-        const poAccounts = await PostOfficeAccount.getAll();
-        const licAccounts = await LICAccount.getAll();
-    
-        const allAccounts = normalizeAccounts(
-            poAccounts,
-            licAccounts,
-            customers
+    async updateDashboard() {
+        const [c, p, l, col] = await Promise.all([
+            Customer.getAll(),
+            PostOfficeAccount.getAll(),
+            LICAccount.getAll(),
+            Collection.getAll()
+        ]);
+
+        $('totalCustomers').textContent = c.length;
+        $('totalAccounts').textContent = p.length + l.length;
+        $('pendingCollections').textContent = col.length;
+
+        const upcoming = [...p, ...l].filter(a =>
+            a.maturityDate &&
+            new Date(a.maturityDate) <= new Date(Date.now() + 30 * 86400000)
         );
-    
-        const typeFilter = document.getElementById('accountTypeFilter')?.value || '';
-        const statusFilter = document.getElementById('accountStatusFilter')?.value || '';
-    
-        let filtered = allAccounts;
-    
-        if (typeFilter) {
-            filtered = filtered.filter(a => a.type === typeFilter);
-        }
-    
-        if (statusFilter) {
-            filtered = filtered.filter(a => a.status === statusFilter);
-        }
-    
-        if (this.accountsCustomerPhoneFilter) {
-            filtered = filtered.filter(
-                a => a.customerPhone === this.accountsCustomerPhoneFilter
-            );
-        }
-    
-        const container = document.getElementById('accountsList');
-    
-        if (!filtered.length) {
-            container.innerHTML = `<div class="card"><p>No accounts found</p></div>`;
-            return;
-        }
-    
-        container.innerHTML = filtered.map(a => `
+        $('upcomingMaturities').textContent = upcoming.length;
+    }
+
+    async loadCustomers() {
+        const customers = await Customer.getAll();
+        $('customersList').innerHTML = customers.map(c => `
             <div class="card">
-                <div class="card-header">
-                    <div class="card-title">
-                        ${a.customerName} (${a.familyGroup})
-                    </div>
-                    <span class="badge">${a.type}</span>
-                </div>
-    
-                <div class="card-body">
-                    <div class="card-field">
-                        <span class="card-label">Account / Policy</span>
-                        <span class="card-value">${a.id}</span>
-                    </div>
-    
-                    <div class="card-field">
-                        <span class="card-label">Scheme</span>
-                        <span class="card-value">${a.scheme}</span>
-                    </div>
-    
-                    <div class="card-field">
-                        <span class="card-label">Status</span>
-                        <span class="card-value">${a.status}</span>
-                    </div>
-                </div>
-    
+                <b>${c.name}</b> (${c.familyGroup})<br>
+                ${c.phoneNumber}
                 <div class="card-actions">
-                    <button class="btn btn-secondary"
-                        onclick="uiManager.editAccount('${a.type}', '${a.id}')">
-                        Edit
-                    </button>
                     <button class="btn btn-danger"
-                        onclick="uiManager.deleteAccount('${a.type}', '${a.id}')">
+                        onclick="uiManager.deleteCustomer('${c.phoneNumber}')">
                         Delete
                     </button>
                 </div>
             </div>
         `).join('');
     }
-    
+
+    async deleteCustomer(phone) {
+        if (!confirm('Delete customer?')) return;
+        const c = new Customer({ phoneNumber: phone });
+        await c.delete();
+        this.loadCustomers();
+        this.updateDashboard();
+    }
+
+    async loadAccounts() {
+        const customers = await Customer.getAll();
+        const map = new Map(customers.map(c => [c.phoneNumber, c]));
+        const po = await PostOfficeAccount.getAll();
+        const lic = await LICAccount.getAll();
+
+        $('accountsList').innerHTML = [
+            ...po.map(a => ({ id: a.accountNumber, type: 'PostOffice', scheme: a.accountType, c: map.get(a.customerPhone) })),
+            ...lic.map(a => ({ id: a.policyNumber, type: 'LIC', scheme: a.licPlan, c: map.get(a.customerPhone) }))
+        ].map(a => `
+            <div class="card">
+                <b>${a.c?.name || 'Unknown'}</b> (${a.c?.familyGroup || ''})<br>
+                ${a.type} • ${a.id} • ${a.scheme}
+            </div>
+        `).join('');
+    }
 }
 
 /* ============================================================
-   INIT + AUTH (CACHE SAFE)
+   MATURITY + COLLECTION
+============================================================ */
+class MaturityTracker {
+    async filter() {
+        const customers = await Customer.getAll();
+        const po = await PostOfficeAccount.getAll();
+        const lic = await LICAccount.getAll();
+        const map = new Map(customers.map(c => [c.phoneNumber, c]));
+
+        const items = [];
+
+        po.forEach(a => {
+            if (a.maturityDate) {
+                const c = map.get(a.customerPhone);
+                if (c) items.push({
+                    name: c.name,
+                    family: c.familyGroup,
+                    id: a.accountNumber,
+                    date: a.maturityDate,
+                    amount: a.expectedMaturityAmount
+                });
+            }
+        });
+
+        lic.forEach(a => {
+            if (a.maturityDate) {
+                const c = map.get(a.customerPhone);
+                if (c) items.push({
+                    name: c.name,
+                    family: c.familyGroup,
+                    id: a.policyNumber,
+                    date: a.maturityDate,
+                    amount: a.maturityDestinationAmount
+                });
+            }
+        });
+
+        items.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+        $('maturityList').innerHTML = items.length
+            ? items.map(i => `
+                <div class="card">
+                    <b>${i.name}</b> (${i.family})<br>
+                    ${i.id} • ${i.date} • ₹${i.amount}
+                </div>
+            `).join('')
+            : '<div class="card"><p>No maturities</p></div>';
+    }
+}
+
+class CollectionTracker {
+    async display() {
+        const collections = await Collection.getAll();
+        $('collectionList').innerHTML = collections.length
+            ? collections.map(c => `
+                <div class="card">
+                    ${c.name} (${c.familyGroup})<br>
+                    ₹${c.amount} • ${c.mode}
+                </div>
+            `).join('')
+            : '<div class="card"><p>No collections</p></div>';
+    }
+}
+
+/* ============================================================
+   INIT + AUTH
 ============================================================ */
 const uiManager = new UIManager();
+const maturityTracker = new MaturityTracker();
+const collectionTracker = new CollectionTracker();
 
-async function initSpreadsheet() {
+window.uiManager = uiManager;
+window.maturityTracker = maturityTracker;
+window.collectionTracker = collectionTracker;
+
+async function initApp() {
     await sheetsAPI.init();
     await sheetsAPI.authenticate();
 
     let id = localStorage.getItem('spreadsheetId');
-
     if (!id) {
-        id = await sheetsAPI.findSpreadsheetByName(APP_SPREADSHEET_NAME);
-        if (!id) {
-            id = await sheetsAPI.createSpreadsheet(APP_SPREADSHEET_NAME);
-        }
+        id = await sheetsAPI.findSpreadsheetByName(APP_SPREADSHEET_NAME)
+            || await sheetsAPI.createSpreadsheet(APP_SPREADSHEET_NAME);
         localStorage.setItem('spreadsheetId', id);
     }
-
     sheetsAPI.setSpreadsheetId(id);
+
+    $('authBtn').style.display = 'none';
+    $('userInfo').style.display = 'inline';
+    $('userInfo').textContent = 'Signed in';
+    $('signOutBtn').style.display = 'inline';
+
+    uiManager.updateDashboard();
 }
 
-byId('authBtn').onclick = async () => {
-    try {
-        await initSpreadsheet();
-        byId('authBtn').style.display = 'none';
-        byId('userInfo').textContent = 'Signed in';
-        byId('userInfo').style.display = 'inline';
-        byId('signOutBtn').style.display = 'inline';
-        await uiManager.loadAccounts();
-    } catch (e) {
-        alert(e.message);
-    }
-};
-
-byId('signOutBtn').onclick = async () => {
+$('authBtn').onclick = initApp;
+$('signOutBtn').onclick = async () => {
     await sheetsAPI.signOut();
-    localStorage.removeItem('spreadsheetId');
+    localStorage.clear();
     location.reload();
 };
