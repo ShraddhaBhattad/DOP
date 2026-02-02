@@ -1,63 +1,182 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Post Office Agent PWA - Customer and Account Management">
     <title>Post Office Agent</title>
 
-    <link rel="stylesheet" href="styles.css" />
+    <link rel="manifest" href="manifest.json">
+    <link rel="stylesheet" href="styles.css">
+
+    <!-- Google APIs -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
 </head>
+
 <body>
+    <!-- Header -->
+    <header class="header">
+        <h1>Post Office Agent</h1>
+        <div class="auth-section">
+            <button id="authBtn" class="btn btn-primary">Sign In with Google</button>
+            <span id="userInfo" class="user-info" style="display:none;"></span>
+            <button id="signOutBtn" class="btn btn-secondary" style="display:none;">Sign Out</button>
+        </div>
+    </header>
 
-<header class="header">
-    <h1>Post Office Agent</h1>
-    <div>
-        <button id="authBtn">Sign In</button>
-        <span id="userInfo" style="display:none"></span>
-        <button id="signOutBtn" style="display:none">Sign Out</button>
+    <!-- Main Content -->
+    <main class="main-content">
+        <!-- Dashboard -->
+        <section id="dashboard" class="section active">
+            <h2>Dashboard</h2>
+            <div class="stats-grid">
+                <div class="stat-card" onclick="uiManager.navigateToSection('customers')">
+                    <h3 id="totalCustomers">0</h3>
+                    <p>Total Customers</p>
+                </div>
+                <div class="stat-card" onclick="uiManager.navigateToSection('accounts')">
+                    <h3 id="totalAccounts">0</h3>
+                    <p>Total Accounts</p>
+                </div>
+                <div class="stat-card" onclick="uiManager.navigateToSection('maturity-tracker')">
+                    <h3 id="upcomingMaturities">0</h3>
+                    <p>Upcoming Maturities</p>
+                </div>
+                <div class="stat-card" onclick="uiManager.navigateToSection('collection-tracker')">
+                    <h3 id="pendingCollections">0</h3>
+                    <p>Pending Collections</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- Customers -->
+        <section id="customers" class="section">
+            <div class="section-header">
+                <h2>Customers</h2>
+                <button class="btn btn-primary" onclick="uiManager.showCustomerForm()">+ Add Customer</button>
+            </div>
+            <div class="search-bar">
+                <input type="text" placeholder="Search..." oninput="uiManager.filterCustomers(this.value)">
+            </div>
+            <div id="customersList" class="list-container"></div>
+        </section>
+
+        <!-- Accounts -->
+        <section id="accounts" class="section">
+            <div class="section-header">
+                <h2>Accounts</h2>
+                <div class="btn-group">
+                    <button class="btn btn-primary" onclick="uiManager.showAccountForm('PostOffice')">+ Post Office</button>
+                    <button class="btn btn-primary" onclick="uiManager.showAccountForm('LIC')">+ LIC</button>
+                </div>
+            </div>
+
+            <div class="filter-bar">
+                <select id="accountTypeFilter" onchange="uiManager.filterAccounts()">
+                    <option value="">All Types</option>
+                    <option value="PostOffice">Post Office</option>
+                    <option value="LIC">LIC</option>
+                </select>
+                <select id="accountStatusFilter" onchange="uiManager.filterAccounts()">
+                    <option value="">All Status</option>
+                    <option value="Active">Active</option>
+                    <option value="Closed">Closed</option>
+                    <option value="WithHeld">WithHeld</option>
+                    <option value="Matured">Matured</option>
+                </select>
+            </div>
+
+            <div id="accountsList" class="list-container"></div>
+        </section>
+
+        <!-- Maturity Tracker -->
+        <section id="maturity-tracker" class="section">
+            <h2>Maturity Tracker</h2>
+            <div class="filter-bar">
+                <input type="date" id="maturityStartDate" onchange="maturityTracker.filter()">
+                <input type="date" id="maturityEndDate" onchange="maturityTracker.filter()">
+                <input type="text" placeholder="Name..." oninput="maturityTracker.filter()">
+                <input type="text" placeholder="Family..." oninput="maturityTracker.filter()">
+            </div>
+            <div id="maturityList" class="list-container"></div>
+        </section>
+
+        <!-- Collection Tracker -->
+        <section id="collection-tracker" class="section">
+            <h2>Collection Tracker</h2>
+            <div id="collectionList" class="list-container"></div>
+        </section>
+
+        <!-- Raw Data -->
+        <section id="raw-data" class="section">
+            <h2>Raw Data</h2>
+            <div class="section-header">
+                <button class="btn btn-secondary" onclick="uiManager.exportData()">Export JSON</button>
+                <button class="btn btn-secondary" onclick="uiManager.importData()">Import JSON</button>
+            </div>
+            <textarea id="rawDataEditor" class="raw-data-editor"></textarea>
+            <button class="btn btn-primary" onclick="uiManager.saveRawData()">Save Changes</button>
+        </section>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-btn active" onclick="uiManager.showSection('dashboard')">🏠 Home</button>
+        <button class="nav-btn" onclick="uiManager.showSection('customers')">👥 Customers</button>
+        <button class="nav-btn" onclick="uiManager.showSection('accounts')">💼 Accounts</button>
+        <button class="nav-btn" onclick="uiManager.showSection('maturity-tracker')">📅 Maturity</button>
+        <button class="nav-btn" onclick="uiManager.showSection('collection-tracker')">💰 Collections</button>
+        <button class="nav-btn" onclick="uiManager.showSection('raw-data')">📊 Data</button>
+    </nav>
+
+    <!-- Modal -->
+    <div id="modal" class="modal">
+        <div class="modal-content">
+            <span class="close" onclick="uiManager.closeModal()">&times;</span>
+            <div id="modalBody"></div>
+        </div>
     </div>
-</header>
 
-<nav>
-    <button onclick="ui.navigate('dashboard')">Dashboard</button>
-    <button onclick="ui.navigate('customers')">Customers</button>
-    <button onclick="ui.navigate('accounts')">Accounts</button>
-</nav>
+    <!-- App Scripts -->
+    <script src="sheets-api.js"></script>
+    <script src="app.js"></script>
+    <script src="tests.js"></script>
 
-<main>
+    <!-- 🔑 AUTO SIGN-IN (MINIMAL, SAFE, CORRECT) -->
+    <script>
+        window.addEventListener('DOMContentLoaded', async () => {
+            if (!window.sheetsAPI?.init) return;
 
-<section id="dashboard" class="page active">
-    <h2>Dashboard</h2>
-    <div>Total Customers: <span id="dc">0</span></div>
-    <div>Total Accounts: <span id="da">0</span></div>
-</section>
+            try {
+                await sheetsAPI.init();
 
-<section id="customers" class="page">
-    <h2>Customers</h2>
-    <button onclick="ui.openCustomerForm()">+ Add Customer</button>
-    <div id="customerList"></div>
-</section>
+                if (sheetsAPI.isSignedIn && await sheetsAPI.isSignedIn()) {
+                    document.getElementById('authBtn').style.display = 'none';
+                    document.getElementById('userInfo').style.display = 'inline';
+                    document.getElementById('userInfo').textContent = 'Signed in';
+                    document.getElementById('signOutBtn').style.display = 'inline';
 
-<section id="accounts" class="page">
-    <h2>Accounts</h2>
-    <button onclick="ui.openAccountForm()">+ Add Account</button>
-    <div id="accountList"></div>
-</section>
+                    if (window.uiManager?.updateDashboard) {
+                        uiManager.updateDashboard();
+                    }
+                }
+            } catch (e) {
+                console.warn('Silent sign-in restore failed:', e);
+            }
+        });
+    </script>
 
-</main>
-
-<!-- MODAL -->
-<div id="modal" style="display:none; position:fixed; inset:0; background:#0008">
-    <div style="background:#fff; margin:10% auto; padding:20px; width:300px">
-        <div id="modalBody"></div>
-        <button onclick="ui.closeModal()">Close</button>
-    </div>
-</div>
-
-<script src="sheets-api.js"></script>
-<script src="app.js"></script>
-
+    <!-- Service Worker -->
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker
+                    .register('/service-worker.js')
+                    .then(() => console.log('Service Worker registered'))
+                    .catch(err => console.error('SW failed:', err));
+            });
+        }
+    </script>
 </body>
 </html>

@@ -1,11 +1,8 @@
 class SheetsAPI {
     constructor() {
         this.SPREADSHEET_ID = null;
-        this.DISCOVERY_DOCS = [
-            'https://sheets.googleapis.com/$discovery/rest?version=v4',
-            'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'
-          ];
-        this.SCOPES =   'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive.file';
+        this.DISCOVERY_DOCS = ['https://sheets.googleapis.com/$discovery/rest?version=v4'];
+        this.SCOPES = 'https://www.googleapis.com/auth/spreadsheets';
         this.tokenClient = null;
         this.gapiInited = false;
         this.gisInited = false;
@@ -70,29 +67,6 @@ class SheetsAPI {
         return this.SPREADSHEET_ID;
     }
 
-    async findSpreadsheetByName(name) {
-        if (!gapi.client.drive || !gapi.client.drive.files) {
-            throw new Error('Google Drive API not loaded');
-        }
-    
-        const response = await gapi.client.drive.files.list({
-            q: `mimeType='application/vnd.google-apps.spreadsheet' and name='${name}' and trashed=false`,
-            fields: 'files(id, name)',
-            spaces: 'drive'
-        });
-    
-        const files = response.result?.files || [];
-    
-        if (files.length > 0) {
-            this.SPREADSHEET_ID = files[0].id;
-            return this.SPREADSHEET_ID;
-        }
-    
-        return null;
-    }
-    
-
-    
     async createSheets() {
         const requests = [
             { addSheet: { properties: { title: 'Customers', gridProperties: { rowCount: 1000, columnCount: 4 } } } },
