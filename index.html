@@ -3,135 +3,61 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="Post Office Agent PWA - Customer and Account Management" />
     <title>Post Office Agent</title>
 
-    <link rel="manifest" href="manifest.json" />
     <link rel="stylesheet" href="styles.css" />
-
-    <!-- Google APIs -->
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
 </head>
-
 <body>
-    <!-- HEADER -->
-    <header class="header">
-        <h1>Post Office Agent</h1>
-        <div class="auth-section">
-            <button id="authBtn" class="btn btn-primary">
-                Sign In with Google
-            </button>
-            <span id="userInfo" class="user-info" style="display:none;"></span>
-            <button id="signOutBtn" class="btn btn-secondary" style="display:none;">
-                Sign Out
-            </button>
-        </div>
-    </header>
 
-    <!-- MAIN CONTENT -->
-    <main class="main-content">
+<header class="header">
+    <h1>Post Office Agent</h1>
+    <div>
+        <button id="authBtn">Sign In</button>
+        <span id="userInfo" style="display:none"></span>
+        <button id="signOutBtn" style="display:none">Sign Out</button>
+    </div>
+</header>
 
-        <!-- DASHBOARD -->
-        <section id="dashboard" class="section active">
-            <h2>Dashboard</h2>
+<nav>
+    <button onclick="ui.navigate('dashboard')">Dashboard</button>
+    <button onclick="ui.navigate('customers')">Customers</button>
+    <button onclick="ui.navigate('accounts')">Accounts</button>
+</nav>
 
-            <div class="stats-grid">
-                <div class="stat-card" onclick="uiManager.navigateToSection('customers')">
-                    <h3 id="totalCustomers">0</h3>
-                    <p>Total Customers</p>
-                </div>
+<main>
 
-                <div class="stat-card" onclick="uiManager.navigateToSection('accounts')">
-                    <h3 id="totalAccounts">0</h3>
-                    <p>Total Accounts</p>
-                </div>
+<section id="dashboard" class="page active">
+    <h2>Dashboard</h2>
+    <div>Total Customers: <span id="dc">0</span></div>
+    <div>Total Accounts: <span id="da">0</span></div>
+</section>
 
-                <div class="stat-card" onclick="uiManager.navigateToSection('maturity-tracker')">
-                    <h3 id="upcomingMaturities">0</h3>
-                    <p>Upcoming Maturities</p>
-                </div>
+<section id="customers" class="page">
+    <h2>Customers</h2>
+    <button onclick="ui.openCustomerForm()">+ Add Customer</button>
+    <div id="customerList"></div>
+</section>
 
-                <div class="stat-card" onclick="uiManager.navigateToSection('collection-tracker')">
-                    <h3 id="pendingCollections">0</h3>
-                    <p>Collections</p>
-                </div>
-            </div>
-        </section>
+<section id="accounts" class="page">
+    <h2>Accounts</h2>
+    <button onclick="ui.openAccountForm()">+ Add Account</button>
+    <div id="accountList"></div>
+</section>
 
-        <!-- CUSTOMERS -->
-        <section id="customers" class="section">
-            <h2>Customers</h2>
-            <div id="customersList" class="list-container"></div>
-        </section>
+</main>
 
-        <!-- ACCOUNTS -->
-        <section id="accounts" class="section">
-            <h2>Accounts</h2>
+<!-- MODAL -->
+<div id="modal" style="display:none; position:fixed; inset:0; background:#0008">
+    <div style="background:#fff; margin:10% auto; padding:20px; width:300px">
+        <div id="modalBody"></div>
+        <button onclick="ui.closeModal()">Close</button>
+    </div>
+</div>
 
-            <div class="filter-bar">
-                <select id="accountTypeFilter" onchange="uiManager.loadAccounts()">
-                    <option value="">All Types</option>
-                    <option value="PostOffice">Post Office</option>
-                    <option value="LIC">LIC</option>
-                </select>
+<script src="sheets-api.js"></script>
+<script src="app.js"></script>
 
-                <select id="accountStatusFilter" onchange="uiManager.loadAccounts()">
-                    <option value="">All Status</option>
-                    <option value="Active">Active</option>
-                    <option value="Closed">Closed</option>
-                    <option value="WithHeld">WithHeld</option>
-                    <option value="Matured">Matured</option>
-                </select>
-            </div>
-
-            <div id="accountsList" class="list-container"></div>
-        </section>
-
-        <!-- MATURITY TRACKER -->
-        <section id="maturity-tracker" class="section">
-            <h2>Maturity Tracker</h2>
-
-            <div class="filter-bar">
-                <input type="date" id="maturityStartDate" onchange="maturityTracker.filter()" />
-                <input type="date" id="maturityEndDate" onchange="maturityTracker.filter()" />
-                <input type="text" id="maturityNameFilter" placeholder="Customer name" oninput="maturityTracker.filter()" />
-                <input type="text" id="maturityFamilyFilter" placeholder="Family group" oninput="maturityTracker.filter()" />
-            </div>
-
-            <div id="maturityList" class="list-container"></div>
-        </section>
-
-        <!-- COLLECTION TRACKER -->
-        <section id="collection-tracker" class="section">
-            <h2>Collection Tracker</h2>
-            <div id="collectionList" class="list-container"></div>
-        </section>
-
-    </main>
-
-    <!-- BOTTOM NAVIGATION -->
-    <nav class="bottom-nav">
-        <button class="nav-btn active" onclick="uiManager.navigateToSection('dashboard')">🏠 Home</button>
-        <button class="nav-btn" onclick="uiManager.navigateToSection('customers')">👥 Customers</button>
-        <button class="nav-btn" onclick="uiManager.navigateToSection('accounts')">💼 Accounts</button>
-        <button class="nav-btn" onclick="uiManager.navigateToSection('maturity-tracker')">📅 Maturity</button>
-        <button class="nav-btn" onclick="uiManager.navigateToSection('collection-tracker')">💰 Collections</button>
-    </nav>
-
-    <!-- SCRIPTS -->
-    <script src="sheets-api.js"></script>
-    <script src="app.js"></script>
-
-    <!-- SERVICE WORKER (OPTIONAL, SAFE) -->
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker
-                    .register('service-worker.js')
-                    .catch(() => {});
-            });
-        }
-    </script>
 </body>
 </html>
